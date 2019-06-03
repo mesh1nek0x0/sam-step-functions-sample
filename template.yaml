@@ -1,10 +1,10 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
   sam-step-functions-sample
 
   Sample SAM Template for sam-step-functions-sample
-  
+
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
@@ -23,6 +23,63 @@ Resources:
           Properties:
             Path: /hello
             Method: get
+  Step2:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: step2/
+      Handler: app.lambdaHandler
+      Runtime: nodejs10.x
+
+  SampleStateMachine:
+    Type: "AWS::StepFunctions::StateMachine"
+    Properties:
+      StateMachineName: SampleStateMachine
+      RoleArn: !GetAtt StepFunctionsServiceRole.Arn
+      DefinitionString: !Sub |-
+        {
+          "Comment": "A Hello World example using an AWS Lambda function",
+          "StartAt": "HelloWorld",
+          "States": {
+            "HelloWorld": {
+              "Type": "Task",
+              "Resource": "${HelloWorldFunction.Arn}",
+              "Next": "Step2"
+            },
+            "Step2": {
+              "Type": "Task",
+              "Resource": "${Step2.Arn}",
+              "End": true
+            }
+          }
+        }
+
+  StepFunctionsServiceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Path: !Join ["", ["/", !Ref "AWS::StackName", "/"]]
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AWSStepFunctionsFullAccess"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "AllowStepFunctionsServiceToAssumeRole"
+            Effect: "Allow"
+            Action:
+              - "sts:AssumeRole"
+            Principal:
+              Service:
+                - !Sub "states.${AWS::Region}.amazonaws.com"
+      Policies:
+        - PolicyName: "CallLambdaFunctions"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "lambda:InvokeFunction"
+                Resource:
+                  - !Sub ${HelloWorldFunction.Arn}
+                  - !Sub ${Step2.Arn}
 
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
@@ -37,3 +94,10 @@ Outputs:
   HelloWorldFunctionIamRole:
     Description: "Implicit IAM Role created for Hello World function"
     Value: !GetAtt HelloWorldFunctionRole.Arn
+
+  Step2:
+    Description: "Hello World Lambda Function ARN"
+    Value: !GetAtt Step2.Arn
+  Step2IamRole:
+    Description: "Implicit IAM Role created for Hello World function"
+    Value: !GetAtt Step2.Arn
